@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import axios, { isAxiosError } from 'axios';
 import { router } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import { useState, type ReactNode } from 'react';
 import {
     ActivityIndicator,
@@ -17,22 +16,22 @@ import {
     View,
 } from 'react-native';
 
-const API_URL = 'http://planfin.tech:8080/auth/login';
+const API_URL = 'http://planfin.tech:8080/usuarios';
 
-type LoginFieldProps = {
+type InputFieldProps = {
     icon: keyof typeof Ionicons.glyphMap;
     value: string;
     onChangeText: (value: string) => void;
     placeholder: string;
     secureTextEntry?: boolean;
     keyboardType?: 'default' | 'email-address';
-    textContentType?: 'none' | 'emailAddress' | 'password';
-    autoCapitalize?: 'none';
+    textContentType?: 'none' | 'emailAddress' | 'password' | 'name';
+    autoCapitalize?: 'none' | 'words';
     rightAccessory?: ReactNode;
     editable?: boolean;
 };
 
-function LoginField({
+function InputField({
     icon,
     value,
     onChangeText,
@@ -43,10 +42,10 @@ function LoginField({
     autoCapitalize = 'none',
     rightAccessory,
     editable = true,
-}: LoginFieldProps) {
+}: InputFieldProps) {
     return (
         <View style={styles.field}>
-            <Ionicons name={icon} size={18} color={COLORS.fieldIcon} style={styles.fieldIcon} />
+            <Ionicons nome={icon} size={18} color={COLORS.fieldIcon} style={styles.fieldIcon} />
             <TextInput
                 value={value}
                 onChangeText={onChangeText}
@@ -64,17 +63,29 @@ function LoginField({
     );
 }
 
-export default function LoginScreen() {
+export default function SignUpScreen() {
+    const [nome, setNome] = useState('');
     const [email, setEmail] = useState('');
     const [senha, setSenha] = useState('');
+    const [confirmSenha, setConfirmSenha] = useState('');
     const [isSenhaVisible, setIsSenhaVisible] = useState(false);
+    const [isConfirmSenhaVisible, setIsConfirmSenhaVisible] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleLogin = async () => {
+    const handleSignUp = async () => {
         // Validação básica
+        if (!nome.trim() || !email.trim() || !senha.trim() || !confirmSenha.trim()) {
+            Alert.alert('Campos obrigatórios', 'Por favor, preencha todos os campos.');
+            return;
+        }
 
-        if (!email.trim() || !senha.trim()) {
-            Alert.alert('Campos obrigatórios', 'Por favor, preencha email e senha.');
+        if (senha !== confirmSenha) {
+            Alert.alert('Senhas incompatíveis', 'As senhas informadas não coincidem.');
+            return;
+        }
+
+        if (senha.length < 6) {
+            Alert.alert('Senha fraca', 'A senha deve ter pelo menos 6 caracteres.');
             return;
         }
 
@@ -82,57 +93,38 @@ export default function LoginScreen() {
 
         try {
             const response = await axios.post(API_URL, {
+                nome: nome.trim(),
                 email: email.trim(),
-
                 senha: senha.trim(),
             });
 
-            // Extrai o token da resposta
-            const { token } = response.data;
-
-            if (token) {
-                // Salva o token de forma segura
-                await SecureStore.setItemAsync('userToken', token);
-
-                // Login bem-sucedido, redireciona para as telas autenticadas
-                router.replace('/(tabs)/home');
-            } else {
-                Alert.alert('Erro', 'Token não recebido do servidor.');
+            if (response.status === 201 || response.status === 200) {
+                Alert.alert('Sucesso', 'Conta criada com sucesso!', [
+                    { text: 'Ir para Login', onPress: () => router.replace('/login') }
+                ]);
             }
         } catch (error) {
-            // Erro de rede ou credenciais inválidas
             let errorMessage = 'Erro ao conectar com o servidor';
 
             if (isAxiosError(error)) {
                 if (error.response) {
-                    // Erro da API (4xx, 5xx)
                     errorMessage =
-                        error.response.data?.message || 'Email ou senha inválidos. Tente novamente.';
+                        error.response.data?.message || 'Erro ao criar conta. Tente novamente.';
                 } else if (error.request) {
-                    // Erro de rede (sem resposta do servidor)
                     errorMessage = 'Erro de conexão. Verifique sua internet.';
                 } else {
-                    // Erro durante a construção da requisição
                     errorMessage = error.message;
                 }
             }
 
-            Alert.alert('Falha no login', errorMessage);
+            Alert.alert('Falha no cadastro', errorMessage);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleForgotSenha = () => {
-        Alert.alert('Recuperação de Senha', 'Recurso de recuperação em breve.');
-    };
-
-    const handleSignUp = () => {
-        router.navigate('/sing-up-screen');
-    };
-
-    const handleBiometric = () => {
-        Alert.alert('Login Biométrico', 'Autenticação biométrica em breve.');
+    const handleSignIn = () => {
+        router.navigate('/login'); 
     };
 
     return (
@@ -149,14 +141,24 @@ export default function LoginScreen() {
 
                         <View style={styles.card}>
                             <Text style={styles.title}>
-                                Welcome
+                                Create
                                 {'\n'}
-                                Back
+                                Account
                             </Text>
-                            <Text style={styles.subtitle}>Sign in to manage your growth and assets securely.</Text>
+                            <Text style={styles.subtitle}>Join us to manage your growth and assets securely.</Text>
 
                             <View style={styles.form}>
-                                <LoginField
+                                <InputField
+                                    icon="person-outline"
+                                    value={nome}
+                                    onChangeText={setNome}
+                                    placeholder="Full name"
+                                    textContentType="name"
+                                    autoCapitalize="words"
+                                    editable={!isLoading}
+                                />
+
+                                <InputField
                                     icon="mail-outline"
                                     value={email}
                                     onChangeText={setEmail}
@@ -166,11 +168,11 @@ export default function LoginScreen() {
                                     editable={!isLoading}
                                 />
 
-                                <LoginField
+                                <InputField
                                     icon="lock-closed-outline"
                                     value={senha}
                                     onChangeText={setSenha}
-                                    placeholder="Password"
+                                    placeholder="senha"
                                     secureTextEntry={!isSenhaVisible}
                                     textContentType="password"
                                     editable={!isLoading}
@@ -178,11 +180,31 @@ export default function LoginScreen() {
                                         <Pressable
                                             hitSlop={10}
                                             disabled={isLoading}
-                                            accessibilityRole="button"
-                                            accessibilityLabel={isSenhaVisible ? 'Hide password' : 'Show password'}
                                             onPress={() => setIsSenhaVisible((current) => !current)}>
                                             <Ionicons
-                                                name={isSenhaVisible ? 'eye-off-outline' : 'eye-outline'}
+                                                nome={isSenhaVisible ? 'eye-off-outline' : 'eye-outline'}
+                                                size={22}
+                                                color={COLORS.fieldIcon}
+                                            />
+                                        </Pressable>
+                                    }
+                                />
+
+                                <InputField
+                                    icon="shield-checkmark-outline"
+                                    value={confirmSenha}
+                                    onChangeText={setConfirmSenha}
+                                    placeholder="Confirm senha"
+                                    secureTextEntry={!isConfirmSenhaVisible}
+                                    textContentType="password"
+                                    editable={!isLoading}
+                                    rightAccessory={
+                                        <Pressable
+                                            hitSlop={10}
+                                            disabled={isLoading}
+                                            onPress={() => setIsConfirmSenhaVisible((current) => !current)}>
+                                            <Ionicons
+                                                nome={isConfirmSenhaVisible ? 'eye-off-outline' : 'eye-outline'}
                                                 size={22}
                                                 color={COLORS.fieldIcon}
                                             />
@@ -191,41 +213,20 @@ export default function LoginScreen() {
                                 />
 
                                 <Pressable
-                                    style={styles.forgotPassword}
+                                    style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled, { marginTop: 12 }]}
                                     disabled={isLoading}
-                                    onPress={handleForgotSenha}>
-                                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-                                </Pressable>
-
-                                <Pressable
-                                    style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
-                                    disabled={isLoading}
-                                    onPress={handleLogin}>
+                                    onPress={handleSignUp}>
                                     {isLoading ? (
                                         <ActivityIndicator size="small" color={COLORS.buttonText} />
                                     ) : (
-                                        <Text style={styles.primaryButtonText}>Login</Text>
+                                        <Text style={styles.primaryButtonText}>Sign Up</Text>
                                     )}
                                 </Pressable>
 
-                                <View style={styles.dividerRow}>
-                                    <View style={styles.dividerLine} />
-                                    <Text style={styles.dividerText}>SECURITY VERIFIED</Text>
-                                    <View style={styles.dividerLine} />
-                                </View>
-
-                                <Pressable
-                                    style={styles.biometricButton}
-                                    disabled={isLoading}
-                                    onPress={handleBiometric}>
-                                    <Ionicons name="finger-print-outline" size={22} color={COLORS.biometricColor} />
-                                    <Text style={styles.biometricButtonText}>Login with Biometrics</Text>
-                                </Pressable>
-
-                                <View style={styles.signUpRow}>
-                                    <Text style={styles.signUpPrefix}>New to IS Financial? </Text>
-                                    <Pressable disabled={isLoading} onPress={handleSignUp}>
-                                        <Text style={styles.signUpAction}>Sign Up</Text>
+                                <View style={styles.signInRow}>
+                                    <Text style={styles.signInPrefix}>Already have an account? </Text>
+                                    <Pressable disabled={isLoading} onPress={handleSignIn}>
+                                        <Text style={styles.signInAction}>Sign In</Text>
                                     </Pressable>
                                 </View>
                             </View>
@@ -233,7 +234,7 @@ export default function LoginScreen() {
 
                         <View style={styles.footer}>
                             <View style={styles.footerLine}>
-                                <Ionicons name="lock-closed" size={13} color={COLORS.footer} />
+                                <Ionicons nome="lock-closed" size={13} color={COLORS.footer} />
                                 <Text style={styles.footerText}>256-bit SSL Encryption Secured</Text>
                             </View>
                             <Text style={styles.footerText}>© 2024 IS Financial Services. Member FDIC.</Text>
@@ -350,17 +351,6 @@ const styles = StyleSheet.create({
     fieldAccessory: {
         marginLeft: 10,
     },
-    forgotPassword: {
-        alignSelf: 'flex-end',
-        marginTop: -4,
-        marginBottom: 18,
-    },
-    forgotPasswordText: {
-        color: COLORS.signUp,
-        fontSize: 14,
-        lineHeight: 18,
-        fontWeight: '500',
-    },
     primaryButton: {
         height: 56,
         borderRadius: 999,
@@ -384,53 +374,19 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
     },
-    dividerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        marginTop: 28,
-        marginBottom: 26,
-    },
-    dividerLine: {
-        flex: 1,
-        height: 1,
-        backgroundColor: COLORS.divider,
-    },
-    dividerText: {
-        color: COLORS.dividerText,
-        fontSize: 12,
-        letterSpacing: 1.6,
-        fontWeight: '600',
-    },
-    biometricButton: {
-        height: 48,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: COLORS.biometricBorder,
-        backgroundColor: COLORS.biometricBackground,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-    },
-    biometricButtonText: {
-        color: '#2A2A2A',
-        fontSize: 15,
-        fontWeight: '500',
-    },
-    signUpRow: {
-        marginTop: 16,
+    signInRow: {
+        marginTop: 24,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         flexWrap: 'wrap',
     },
-    signUpPrefix: {
+    signInPrefix: {
         color: COLORS.subtitle,
         fontSize: 14,
         lineHeight: 18,
     },
-    signUpAction: {
+    signInAction: {
         color: COLORS.signUp,
         fontSize: 14,
         lineHeight: 18,
