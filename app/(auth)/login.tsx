@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import axios, { isAxiosError } from 'axios';
 import { router } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import { useState, type ReactNode } from 'react';
 import {
     ActivityIndicator,
@@ -16,6 +15,7 @@ import {
     TextInput,
     View,
 } from 'react-native';
+import { setAuthToken } from '../../lib/auth-storage';
 
 const API_URL = 'https://6a08f743e7e3f433d482e2dd.mockapi.io/finplan/api/v1/auth';
 
@@ -30,6 +30,7 @@ type LoginFieldProps = {
     autoCapitalize?: 'none';
     rightAccessory?: ReactNode;
     editable?: boolean;
+    errorMessage?: string;
 };
 
 function LoginField({
@@ -43,23 +44,27 @@ function LoginField({
     autoCapitalize = 'none',
     rightAccessory,
     editable = true,
+    errorMessage,
 }: LoginFieldProps) {
     return (
-        <View style={styles.field}>
-            <Ionicons name={icon} size={18} color={COLORS.fieldIcon} style={styles.fieldIcon} />
-            <TextInput
-                value={value}
-                onChangeText={onChangeText}
-                placeholder={placeholder}
-                placeholderTextColor={COLORS.placeholder}
-                secureTextEntry={secureTextEntry}
-                keyboardType={keyboardType}
-                textContentType={textContentType}
-                autoCapitalize={autoCapitalize}
-                editable={editable}
-                style={styles.fieldInput}
-            />
-            {rightAccessory ? <View style={styles.fieldAccessory}>{rightAccessory}</View> : null}
+        <View style={styles.fieldWrapper}>
+            <View style={[styles.field, errorMessage && styles.fieldError]}>
+                <Ionicons name={icon} size={18} color={COLORS.fieldIcon} style={styles.fieldIcon} />
+                <TextInput
+                    value={value}
+                    onChangeText={onChangeText}
+                    placeholder={placeholder}
+                    placeholderTextColor={COLORS.placeholder}
+                    secureTextEntry={secureTextEntry}
+                    keyboardType={keyboardType}
+                    textContentType={textContentType}
+                    autoCapitalize={autoCapitalize}
+                    editable={editable}
+                    style={styles.fieldInput}
+                />
+                {rightAccessory ? <View style={styles.fieldAccessory}>{rightAccessory}</View> : null}
+            </View>
+            {errorMessage ? <Text style={styles.fieldErrorText}>{errorMessage}</Text> : null}
         </View>
     );
 }
@@ -69,14 +74,29 @@ export default function LoginScreen() {
     const [password, setPassword] = useState('');
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [formError, setFormError] = useState('');
+    const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+    const canSubmit = !isLoading;
 
     const handleLogin = async () => {
-        // Validação básica
-        if (!email.trim() || !password.trim()) {
-            Alert.alert('Campos obrigatórios', 'Por favor, preencha email e senha.');
+        const nextFieldErrors: { email?: string; password?: string } = {};
+
+        if (!email.trim()) {
+            nextFieldErrors.email = 'Informe seu email.';
+        }
+
+        if (!password.trim()) {
+            nextFieldErrors.password = 'Informe sua senha.';
+        }
+
+        if (nextFieldErrors.email || nextFieldErrors.password) {
+            setFieldErrors(nextFieldErrors);
+            setFormError('');
             return;
         }
 
+        setFieldErrors({});
+        setFormError('');
         setIsLoading(true);
 
         try {
@@ -85,37 +105,31 @@ export default function LoginScreen() {
                 password: password.trim(),
             });
 
-            // Extrai o token da resposta
             const { token } = response.data;
 
             if (token) {
-                // Salva o token de forma segura
-                await SecureStore.setItemAsync('userToken', token);
-
-                // Login bem-sucedido, redireciona para as telas autenticadas
-                router.replace('/(tabs)/home');
+                await setAuthToken(token);
+                router.replace('/dashboard' as never);
             } else {
-                Alert.alert('Erro', 'Token não recebido do servidor.');
+                setFormError('O servidor respondeu sem token. Tente novamente.');
             }
         } catch (error) {
-            // Erro de rede ou credenciais inválidas
             let errorMessage = 'Erro ao conectar com o servidor';
 
             if (isAxiosError(error)) {
                 if (error.response) {
-                    // Erro da API (4xx, 5xx)
                     errorMessage =
                         error.response.data?.message || 'Email ou senha inválidos. Tente novamente.';
                 } else if (error.request) {
-                    // Erro de rede (sem resposta do servidor)
                     errorMessage = 'Erro de conexão. Verifique sua internet.';
                 } else {
-                    // Erro durante a construção da requisição
                     errorMessage = error.message;
                 }
+            } else if (error instanceof Error) {
+                errorMessage = error.message;
             }
 
-            Alert.alert('Falha no login', errorMessage);
+            setFormError(errorMessage);
         } finally {
             setIsLoading(false);
         }
@@ -153,6 +167,13 @@ export default function LoginScreen() {
                             </Text>
                             <Text style={styles.subtitle}>Sign in to manage your growth and assets securely.</Text>
 
+                            {formError ? (
+                                <View style={styles.errorBanner}>
+                                    <Ionicons name="alert-circle-outline" size={18} color={COLORS.error} />
+                                    <Text style={styles.errorBannerText}>{formError}</Text>
+                                </View>
+                            ) : null}
+
                             <View style={styles.form}>
                                 <LoginField
                                     icon="mail-outline"
@@ -161,7 +182,8 @@ export default function LoginScreen() {
                                     placeholder="Email Address"
                                     keyboardType="email-address"
                                     textContentType="emailAddress"
-                                    editable={!isLoading}
+                                    editable={canSubmit}
+                                    errorMessage={fieldErrors.email}
                                 />
 
                                 <LoginField
@@ -171,11 +193,12 @@ export default function LoginScreen() {
                                     placeholder="Password"
                                     secureTextEntry={!isPasswordVisible}
                                     textContentType="password"
-                                    editable={!isLoading}
+                                    editable={canSubmit}
+                                    errorMessage={fieldErrors.password}
                                     rightAccessory={
                                         <Pressable
                                             hitSlop={10}
-                                            disabled={isLoading}
+                                            disabled={!canSubmit}
                                             accessibilityRole="button"
                                             accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
                                             onPress={() => setIsPasswordVisible((current) => !current)}>
@@ -196,8 +219,8 @@ export default function LoginScreen() {
                                 </Pressable>
 
                                 <Pressable
-                                    style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
-                                    disabled={isLoading}
+                                    style={[styles.primaryButton, !canSubmit && styles.primaryButtonDisabled]}
+                                    disabled={!canSubmit}
                                     onPress={handleLogin}>
                                     {isLoading ? (
                                         <ActivityIndicator size="small" color={COLORS.buttonText} />
@@ -214,7 +237,7 @@ export default function LoginScreen() {
 
                                 <Pressable
                                     style={styles.biometricButton}
-                                    disabled={isLoading}
+                                    disabled={!canSubmit}
                                     onPress={handleBiometric}>
                                     <Ionicons name="finger-print-outline" size={22} color={COLORS.biometricColor} />
                                     <Text style={styles.biometricButtonText}>Login with Biometrics</Text>
@@ -222,7 +245,7 @@ export default function LoginScreen() {
 
                                 <View style={styles.signUpRow}>
                                     <Text style={styles.signUpPrefix}>New to IS Financial? </Text>
-                                    <Pressable disabled={isLoading} onPress={handleSignUp}>
+                                    <Pressable disabled={!canSubmit} onPress={handleSignUp}>
                                         <Text style={styles.signUpAction}>Sign Up</Text>
                                     </Pressable>
                                 </View>
@@ -257,6 +280,8 @@ const COLORS = {
     primaryButton: '#3C6F44',
     primaryButtonDisabled: '#A8C8B0',
     buttonText: '#FFFFFF',
+    error: '#C0392B',
+    errorBackground: '#FBE9E7',
     divider: '#D5CEC4',
     dividerText: '#5D5A55',
     biometricBorder: '#D4C8B8',
@@ -326,6 +351,28 @@ const styles = StyleSheet.create({
     form: {
         marginTop: 24,
     },
+    errorBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: COLORS.errorBackground,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#F2C7C3',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        marginTop: 18,
+    },
+    errorBannerText: {
+        flex: 1,
+        color: COLORS.error,
+        fontSize: 13,
+        lineHeight: 18,
+        fontWeight: '500',
+    },
+    fieldWrapper: {
+        marginBottom: 16,
+    },
     field: {
         height: 58,
         borderRadius: 10,
@@ -333,7 +380,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        marginBottom: 16,
+    },
+    fieldError: {
+        borderWidth: 1,
+        borderColor: COLORS.error,
+        backgroundColor: COLORS.errorBackground,
     },
     fieldIcon: {
         marginRight: 10,
@@ -347,6 +398,14 @@ const styles = StyleSheet.create({
     },
     fieldAccessory: {
         marginLeft: 10,
+    },
+    fieldErrorText: {
+        marginTop: 6,
+        color: COLORS.error,
+        fontSize: 12,
+        lineHeight: 16,
+        fontWeight: '500',
+        paddingLeft: 4,
     },
     forgotPassword: {
         alignSelf: 'flex-end',
