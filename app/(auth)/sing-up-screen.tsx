@@ -15,25 +15,23 @@ import {
     TextInput,
     View,
 } from 'react-native';
-import { setAuthToken } from '../../lib/auth-storage';
 
-const API_URL = 'http://planfin.tech:8080/auth/login';
+const API_URL = 'http://planfin.tech:8080/usuarios';
 
-type LoginFieldProps = {
+type InputFieldProps = {
     icon: keyof typeof Ionicons.glyphMap;
     value: string;
     onChangeText: (value: string) => void;
     placeholder: string;
     secureTextEntry?: boolean;
     keyboardType?: 'default' | 'email-address';
-    textContentType?: 'none' | 'emailAddress' | 'password';
-    autoCapitalize?: 'none';
+    textContentType?: 'none' | 'emailAddress' | 'password' | 'name';
+    autoCapitalize?: 'none' | 'words';
     rightAccessory?: ReactNode;
     editable?: boolean;
-    errorMessage?: string;
 };
 
-function LoginField({
+function InputField({
     icon,
     value,
     onChangeText,
@@ -44,75 +42,66 @@ function LoginField({
     autoCapitalize = 'none',
     rightAccessory,
     editable = true,
-    errorMessage,
-}: LoginFieldProps) {
+}: InputFieldProps) {
     return (
-        <View style={styles.fieldWrapper}>
-            <View style={[styles.field, errorMessage && styles.fieldError]}>
-                <Ionicons name={icon} size={18} color={COLORS.fieldIcon} style={styles.fieldIcon} />
-                <TextInput
-                    value={value}
-                    onChangeText={onChangeText}
-                    placeholder={placeholder}
-                    placeholderTextColor={COLORS.placeholder}
-                    secureTextEntry={secureTextEntry}
-                    keyboardType={keyboardType}
-                    textContentType={textContentType}
-                    autoCapitalize={autoCapitalize}
-                    editable={editable}
-                    style={styles.fieldInput}
-                />
-                {rightAccessory ? <View style={styles.fieldAccessory}>{rightAccessory}</View> : null}
-            </View>
-            {errorMessage ? <Text style={styles.fieldErrorText}>{errorMessage}</Text> : null}
+        <View style={styles.field}>
+            <Ionicons nome={icon} size={18} color={COLORS.fieldIcon} style={styles.fieldIcon} />
+            <TextInput
+                value={value}
+                onChangeText={onChangeText}
+                placeholder={placeholder}
+                placeholderTextColor={COLORS.placeholder}
+                secureTextEntry={secureTextEntry}
+                keyboardType={keyboardType}
+                textContentType={textContentType}
+                autoCapitalize={autoCapitalize}
+                editable={editable}
+                style={styles.fieldInput}
+            />
+            {rightAccessory ? <View style={styles.fieldAccessory}>{rightAccessory}</View> : null}
         </View>
     );
 }
 
-export default function LoginScreen() {
+export default function SignUpScreen() {
+    const [nome, setNome] = useState('');
     const [email, setEmail] = useState('');
     const [senha, setSenha] = useState('');
+    const [confirmSenha, setConfirmSenha] = useState('');
     const [isSenhaVisible, setIsSenhaVisible] = useState(false);
+    const [isConfirmSenhaVisible, setIsConfirmSenhaVisible] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [formError, setFormError] = useState('');
-    const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
-    const canSubmit = !isLoading;
 
-    const handleLogin = async () => {
-        const nextFieldErrors: { email?: string; password?: string } = {};
-
-        if (!email.trim()) {
-            nextFieldErrors.email = 'Informe seu email.';
-        }
-
-        if (!senha.trim()) {
-            nextFieldErrors.password = 'Informe sua senha.';
-        }
-
-        if (nextFieldErrors.email || nextFieldErrors.password) {
-            setFieldErrors(nextFieldErrors);
-            setFormError('');
+    const handleSignUp = async () => {
+        // Validação básica
+        if (!nome.trim() || !email.trim() || !senha.trim() || !confirmSenha.trim()) {
+            Alert.alert('Campos obrigatórios', 'Por favor, preencha todos os campos.');
             return;
         }
 
-        setFieldErrors({});
-        setFormError('');
+        if (senha !== confirmSenha) {
+            Alert.alert('Senhas incompatíveis', 'As senhas informadas não coincidem.');
+            return;
+        }
+
+        if (senha.length < 6) {
+            Alert.alert('Senha fraca', 'A senha deve ter pelo menos 6 caracteres.');
+            return;
+        }
+
         setIsLoading(true);
 
         try {
             const response = await axios.post(API_URL, {
+                nome: nome.trim(),
                 email: email.trim(),
-
                 senha: senha.trim(),
             });
 
-            const { token } = response.data;
-
-            if (token) {
-                await setAuthToken(token);
-                router.replace('/dashboard' as never);
-            } else {
-                setFormError('O servidor respondeu sem token. Tente novamente.');
+            if (response.status === 201 || response.status === 200) {
+                Alert.alert('Sucesso', 'Conta criada com sucesso!', [
+                    { text: 'Ir para Login', onPress: () => router.replace('/login') }
+                ]);
             }
         } catch (error) {
             let errorMessage = 'Erro ao conectar com o servidor';
@@ -120,32 +109,22 @@ export default function LoginScreen() {
             if (isAxiosError(error)) {
                 if (error.response) {
                     errorMessage =
-                        error.response.data?.message || 'Email ou senha inválidos. Tente novamente.';
+                        error.response.data?.message || 'Erro ao criar conta. Tente novamente.';
                 } else if (error.request) {
                     errorMessage = 'Erro de conexão. Verifique sua internet.';
                 } else {
                     errorMessage = error.message;
                 }
-            } else if (error instanceof Error) {
-                errorMessage = error.message;
             }
 
-            setFormError(errorMessage);
+            Alert.alert('Falha no cadastro', errorMessage);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleForgotSenha = () => {
-        Alert.alert('Recuperação de Senha', 'Recurso de recuperação em breve.');
-    };
-
-    const handleSignUp = () => {
-        router.navigate('/sing-up-screen');
-    };
-
-    const handleBiometric = () => {
-        Alert.alert('Login Biométrico', 'Autenticação biométrica em breve.');
+    const handleSignIn = () => {
+        router.navigate('/login'); 
     };
 
     return (
@@ -162,49 +141,70 @@ export default function LoginScreen() {
 
                         <View style={styles.card}>
                             <Text style={styles.title}>
-                                Welcome
+                                Create
                                 {'\n'}
-                                Back
+                                Account
                             </Text>
-                            <Text style={styles.subtitle}>Sign in to manage your growth and assets securely.</Text>
-
-                            {formError ? (
-                                <View style={styles.errorBanner}>
-                                    <Ionicons name="alert-circle-outline" size={18} color={COLORS.error} />
-                                    <Text style={styles.errorBannerText}>{formError}</Text>
-                                </View>
-                            ) : null}
+                            <Text style={styles.subtitle}>Join us to manage your growth and assets securely.</Text>
 
                             <View style={styles.form}>
-                                <LoginField
+                                <InputField
+                                    icon="person-outline"
+                                    value={nome}
+                                    onChangeText={setNome}
+                                    placeholder="Full name"
+                                    textContentType="name"
+                                    autoCapitalize="words"
+                                    editable={!isLoading}
+                                />
+
+                                <InputField
                                     icon="mail-outline"
                                     value={email}
                                     onChangeText={setEmail}
                                     placeholder="Email Address"
                                     keyboardType="email-address"
                                     textContentType="emailAddress"
-                                    editable={canSubmit}
-                                    errorMessage={fieldErrors.email}
+                                    editable={!isLoading}
                                 />
 
-                                <LoginField
+                                <InputField
                                     icon="lock-closed-outline"
                                     value={senha}
                                     onChangeText={setSenha}
-                                    placeholder="Password"
+                                    placeholder="senha"
                                     secureTextEntry={!isSenhaVisible}
                                     textContentType="password"
-                                    editable={canSubmit}
-                                    errorMessage={fieldErrors.password}
+                                    editable={!isLoading}
                                     rightAccessory={
                                         <Pressable
                                             hitSlop={10}
-                                            disabled={!canSubmit}
-                                            accessibilityRole="button"
-                                            accessibilityLabel={isSenhaVisible ? 'Hide password' : 'Show password'}
+                                            disabled={isLoading}
                                             onPress={() => setIsSenhaVisible((current) => !current)}>
                                             <Ionicons
-                                                name={isSenhaVisible ? 'eye-off-outline' : 'eye-outline'}
+                                                nome={isSenhaVisible ? 'eye-off-outline' : 'eye-outline'}
+                                                size={22}
+                                                color={COLORS.fieldIcon}
+                                            />
+                                        </Pressable>
+                                    }
+                                />
+
+                                <InputField
+                                    icon="shield-checkmark-outline"
+                                    value={confirmSenha}
+                                    onChangeText={setConfirmSenha}
+                                    placeholder="Confirm senha"
+                                    secureTextEntry={!isConfirmSenhaVisible}
+                                    textContentType="password"
+                                    editable={!isLoading}
+                                    rightAccessory={
+                                        <Pressable
+                                            hitSlop={10}
+                                            disabled={isLoading}
+                                            onPress={() => setIsConfirmSenhaVisible((current) => !current)}>
+                                            <Ionicons
+                                                nome={isConfirmSenhaVisible ? 'eye-off-outline' : 'eye-outline'}
                                                 size={22}
                                                 color={COLORS.fieldIcon}
                                             />
@@ -213,41 +213,20 @@ export default function LoginScreen() {
                                 />
 
                                 <Pressable
-                                    style={styles.forgotPassword}
+                                    style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled, { marginTop: 12 }]}
                                     disabled={isLoading}
-                                    onPress={handleForgotSenha}>
-                                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-                                </Pressable>
-
-                                <Pressable
-                                    style={[styles.primaryButton, !canSubmit && styles.primaryButtonDisabled]}
-                                    disabled={!canSubmit}
-                                    onPress={handleLogin}>
+                                    onPress={handleSignUp}>
                                     {isLoading ? (
                                         <ActivityIndicator size="small" color={COLORS.buttonText} />
                                     ) : (
-                                        <Text style={styles.primaryButtonText}>Login</Text>
+                                        <Text style={styles.primaryButtonText}>Sign Up</Text>
                                     )}
                                 </Pressable>
 
-                                <View style={styles.dividerRow}>
-                                    <View style={styles.dividerLine} />
-                                    <Text style={styles.dividerText}>SECURITY VERIFIED</Text>
-                                    <View style={styles.dividerLine} />
-                                </View>
-
-                                <Pressable
-                                    style={styles.biometricButton}
-                                    disabled={!canSubmit}
-                                    onPress={handleBiometric}>
-                                    <Ionicons name="finger-print-outline" size={22} color={COLORS.biometricColor} />
-                                    <Text style={styles.biometricButtonText}>Login with Biometrics</Text>
-                                </Pressable>
-
-                                <View style={styles.signUpRow}>
-                                    <Text style={styles.signUpPrefix}>New to IS Financial? </Text>
-                                    <Pressable disabled={!canSubmit} onPress={handleSignUp}>
-                                        <Text style={styles.signUpAction}>Sign Up</Text>
+                                <View style={styles.signInRow}>
+                                    <Text style={styles.signInPrefix}>Already have an account? </Text>
+                                    <Pressable disabled={isLoading} onPress={handleSignIn}>
+                                        <Text style={styles.signInAction}>Sign In</Text>
                                     </Pressable>
                                 </View>
                             </View>
@@ -255,7 +234,7 @@ export default function LoginScreen() {
 
                         <View style={styles.footer}>
                             <View style={styles.footerLine}>
-                                <Ionicons name="lock-closed" size={13} color={COLORS.footer} />
+                                <Ionicons nome="lock-closed" size={13} color={COLORS.footer} />
                                 <Text style={styles.footerText}>256-bit SSL Encryption Secured</Text>
                             </View>
                             <Text style={styles.footerText}>© 2024 IS Financial Services. Member FDIC.</Text>
@@ -281,8 +260,6 @@ const COLORS = {
     primaryButton: '#3C6F44',
     primaryButtonDisabled: '#A8C8B0',
     buttonText: '#FFFFFF',
-    error: '#C0392B',
-    errorBackground: '#FBE9E7',
     divider: '#D5CEC4',
     dividerText: '#5D5A55',
     biometricBorder: '#D4C8B8',
@@ -352,28 +329,6 @@ const styles = StyleSheet.create({
     form: {
         marginTop: 24,
     },
-    errorBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        backgroundColor: COLORS.errorBackground,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#F2C7C3',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        marginTop: 18,
-    },
-    errorBannerText: {
-        flex: 1,
-        color: COLORS.error,
-        fontSize: 13,
-        lineHeight: 18,
-        fontWeight: '500',
-    },
-    fieldWrapper: {
-        marginBottom: 16,
-    },
     field: {
         height: 58,
         borderRadius: 10,
@@ -381,11 +336,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-    },
-    fieldError: {
-        borderWidth: 1,
-        borderColor: COLORS.error,
-        backgroundColor: COLORS.errorBackground,
+        marginBottom: 16,
     },
     fieldIcon: {
         marginRight: 10,
@@ -399,25 +350,6 @@ const styles = StyleSheet.create({
     },
     fieldAccessory: {
         marginLeft: 10,
-    },
-    fieldErrorText: {
-        marginTop: 6,
-        color: COLORS.error,
-        fontSize: 12,
-        lineHeight: 16,
-        fontWeight: '500',
-        paddingLeft: 4,
-    },
-    forgotPassword: {
-        alignSelf: 'flex-end',
-        marginTop: -4,
-        marginBottom: 18,
-    },
-    forgotPasswordText: {
-        color: COLORS.signUp,
-        fontSize: 14,
-        lineHeight: 18,
-        fontWeight: '500',
     },
     primaryButton: {
         height: 56,
@@ -442,53 +374,19 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
     },
-    dividerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        marginTop: 28,
-        marginBottom: 26,
-    },
-    dividerLine: {
-        flex: 1,
-        height: 1,
-        backgroundColor: COLORS.divider,
-    },
-    dividerText: {
-        color: COLORS.dividerText,
-        fontSize: 12,
-        letterSpacing: 1.6,
-        fontWeight: '600',
-    },
-    biometricButton: {
-        height: 48,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: COLORS.biometricBorder,
-        backgroundColor: COLORS.biometricBackground,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-    },
-    biometricButtonText: {
-        color: '#2A2A2A',
-        fontSize: 15,
-        fontWeight: '500',
-    },
-    signUpRow: {
-        marginTop: 16,
+    signInRow: {
+        marginTop: 24,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         flexWrap: 'wrap',
     },
-    signUpPrefix: {
+    signInPrefix: {
         color: COLORS.subtitle,
         fontSize: 14,
         lineHeight: 18,
     },
-    signUpAction: {
+    signInAction: {
         color: COLORS.signUp,
         fontSize: 14,
         lineHeight: 18,
