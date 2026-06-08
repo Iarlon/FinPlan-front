@@ -12,10 +12,10 @@ export default function TabsLayout() {
                 },
             }}>
             <Tabs.Screen
-                name="home"
+                name="dashboard"
                 options={{
-                    title: 'Home',
-                    tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={24} color={color} />,
+                    title: 'Dashboard',
+                    tabBarIcon: ({ color }) => <Ionicons name="grid-outline" size={24} color={color} />,
                     headerTitle: 'Dashboard',
                 }}
             />

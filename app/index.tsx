@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { getAuthToken } from '../lib/auth-storage';
 
 /**
  * Componente de entrada do aplicativo (SplashScreen)
- * Verifica se há um token salvo no SecureStore e redireciona o usuário
+ * Verifica se há um token salvo no armazenamento local e redireciona o usuário
  * para a tela apropriada (login ou dashboard)
  */
 export default function Index() {
@@ -14,18 +14,14 @@ export default function Index() {
     useEffect(() => {
         const checkAuthToken = async () => {
             try {
-                // Tenta recuperar o token armazenado de forma segura
-                const token = await SecureStore.getItemAsync('userToken');
+                const token = await getAuthToken();
 
                 if (token) {
-                    // Token existe, usuário está autenticado - redireciona para dashboard
-                    router.replace('/(tabs)/home');
+                    router.replace('/dashboard' as never);
                 } else {
-                    // Token não existe, usuário precisa fazer login
                     router.replace('/(auth)/login');
                 }
             } catch (error) {
-                // Em caso de erro ao recuperar o token, redireciona para login por segurança
                 console.error('Erro ao verificar token:', error);
                 router.replace('/(auth)/login');
             } finally {
@@ -36,7 +32,6 @@ export default function Index() {
         checkAuthToken();
     }, []);
 
-    // Enquanto verifica o token, mostra uma tela de carregamento
     if (isChecking) {
         return (
             <View style={styles.container}>
@@ -45,7 +40,6 @@ export default function Index() {
         );
     }
 
-    // Este return nunca deve ser alcançado pois os redirects ocorrem antes
     return null;
 }
 
