@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import axios, { isAxiosError } from 'axios';
+import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -111,6 +112,11 @@ export default function DashboardScreen() {
                 if (isMounted) {
                     setMovimentacoes([]);
 
+                    if (isAxiosError(error) && error.response?.status === 401) {
+                        router.replace('/(auth)/login');
+                        return;
+                    }
+
                     if (isAxiosError(error)) {
                         setMovimentacoesError(
                             error.response?.data?.message || 'Não foi possível carregar as movimentações.',
@@ -151,6 +157,11 @@ export default function DashboardScreen() {
                 if (isMounted) {
                     setTotalPortfolioBalance(0);
                     setTendencia([]);
+
+                    if (isAxiosError(error) && error.response?.status === 401) {
+                        router.replace('/(auth)/login');
+                        return;
+                    }
 
                     if (isAxiosError(error)) {
                         setTendenciaError(error.response?.data?.message || 'Não foi possível carregar o gráfico.');
@@ -292,7 +303,7 @@ export default function DashboardScreen() {
                         <Text style={styles.sectionTitle}>Recent Activity</Text>
                         <Pressable
                             style={styles.actionButton}
-                            onPress={() => Alert.alert('New Transaction', 'Fluxo de criação em breve.')}
+                            onPress={() => router.push('/register-transaction')}
                         >
                             <Ionicons name="add" size={18} color={COLORS.surface} />
                             <Text style={styles.actionButtonText}>New Transaction</Text>
