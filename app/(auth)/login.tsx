@@ -15,9 +15,10 @@ import {
     TextInput,
     View,
 } from 'react-native';
+import { API_BASE_URL, configureApiAuth } from '../../lib/api';
 import { setAuthToken } from '../../lib/auth-storage';
 
-const API_URL = 'http://planfin.tech:8080/auth/login';
+const API_URL = `${API_BASE_URL}/auth/login`;
 
 type LoginFieldProps = {
     icon: keyof typeof Ionicons.glyphMap;
@@ -110,6 +111,7 @@ export default function LoginScreen() {
 
             if (token) {
                 await setAuthToken(token);
+                configureApiAuth(token);
                 router.replace('/dashboard' as never);
             } else {
                 setFormError('O servidor respondeu sem token. Tente novamente.');

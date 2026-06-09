@@ -6,26 +6,20 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Circle, Line, Path, Svg, Text as SvgText } from 'react-native-svg';
 import { ActivityRow } from '../../components/ui/activity-row';
+import { API_BASE_URL } from '../../lib/api';
+import { getAuthToken } from '../../lib/auth-storage';
 
-const MOVIMENTACOES_API_URL = 'https://6a08f743e7e3f433d482e2dd.mockapi.io/finplan/api/v1/movimentacoes';
-const MOVIMENTACOES_GRAFICO_API_URL = 'https://6a08f743e7e3f433d482e2dd.mockapi.io/finplan/api/v1/movimentacoesGrafico';
+const MOVIMENTACOES_API_URL = `${API_BASE_URL}/movimentacoes/recentes`;
+const ORCAMENTO_API_URL = `${API_BASE_URL}/orcamento`;
+const MOVIMENTACOES_GRAFICO_API_URL = `${API_BASE_URL}/movimentacoes?pageNumber=1&pageSize=60`;
+const CATEGORIAS_API_URL = `${API_BASE_URL}/movimentacoes/categorias`;
 
 interface Movimentacao {
-    id: string;
-    tipo: string;
     categoria: string;
+    dataMovimentacao: string;
+    descricao: string;
     valor: number;
-    data?: string;
-    descricao?: string;
-}
-
-interface MovimentacaoApiResponse {
-    id: string;
-    tipo: string;
-    categoria: string;
-    valor: string;
-    data?: string;
-    descricao?: string;
+    tag: string;
 }
 
 interface Tendencia {
@@ -33,21 +27,58 @@ interface Tendencia {
     valor: number;
 }
 
-interface TendenciaApiResponse {
-    id: string;
-    data: string;
-    valor: string;
+interface MovimentacaoGraficoApiResponseItem {
+    dataMovimentacao: string;
+    valor: number | string;
 }
+
+interface MovimentacoesGraficoApiResponse {
+    data: MovimentacaoGraficoApiResponseItem[];
+    pageNumber: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+}
+
+type GraficoMovimentacao = {
+    data: string;
+    valor: number;
+};
+
+type CategoriaGrafico = {
+    categoria: string;
+    value: number;
+    color: string;
+};
+
+type CategoriasApiResponseItem = {
+    categoria: string;
+    valor: number | string;
+};
+
+type OrcamentoApiResponse =
+    | number
+    | string
+    | {
+        total?: number | string;
+        valor?: number | string;
+        saldo?: number | string;
+        orcamento?: number | string;
+        value?: number | string;
+        amount?: number | string;
+        data?: {
+            total?: number | string;
+            valor?: number | string;
+            saldo?: number | string;
+            orcamento?: number | string;
+            value?: number | string;
+            amount?: number | string;
+        };
+    };
 
 type ChartPoint = {
     label: string;
     value: number;
-};
-
-type CategoryBreakdownItem = {
-    label: string;
-    value: number;
-    color: string;
 };
 
 type CategoryLegendRowProps = {
@@ -81,6 +112,9 @@ export default function DashboardScreen() {
     const [movimentacoesError, setMovimentacoesError] = useState('');
     const [tendencia, setTendencia] = useState<Tendencia[]>([]);
     const [totalPortfolioBalance, setTotalPortfolioBalance] = useState(0);
+    const [categoriasGrafico, setCategoriasGrafico] = useState<CategoriaGrafico[]>([]);
+    const [isLoadingCategorias, setIsLoadingCategorias] = useState(true);
+    const [categoriasError, setCategoriasError] = useState('');
     const [isLoadingTendencia, setIsLoadingTendencia] = useState(true);
     const [tendenciaError, setTendenciaError] = useState('');
 
@@ -92,19 +126,19 @@ export default function DashboardScreen() {
             setMovimentacoesError('');
 
             try {
-                const response = await axios.get<MovimentacaoApiResponse[]>(MOVIMENTACOES_API_URL);
+                // try to read stored token and include it explicitly as a fallback
+                let token: string | null = null;
+                try {
+                    const { getAuthToken } = await import('../../lib/auth-storage');
+                    token = await getAuthToken();
+                } catch (e) {
+                    console.warn('Could not read auth token before fetching movimentacoes', e);
+                }
+
+                const response = await axios.get<Movimentacao[]>(MOVIMENTACOES_API_URL, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
 
                 if (isMounted) {
-                    const nextMovimentacoes = Array.isArray(response.data)
-                        ? response.data.map((item) => ({
-                            id: String(item.id),
-                            tipo: item.tipo,
-                            categoria: item.categoria,
-                            valor: Number(item.valor),
-                            data: item.data,
-                            descricao: item.descricao,
-                        }))
-                        : [];
+                    const nextMovimentacoes = Array.isArray(response.data) ? response.data : [];
 
                     setMovimentacoes(nextMovimentacoes);
                 }
@@ -136,26 +170,92 @@ export default function DashboardScreen() {
             }
         };
 
-        fetchMovimentacoes();
+        const fetchOrcamento = async () => {
+            try {
+                const token = await getAuthToken();
+                const response = await axios.get<OrcamentoApiResponse>(
+                    ORCAMENTO_API_URL,
+                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+                );
+
+                if (isMounted) {
+                    setTotalPortfolioBalance(extractBudgetValue(response.data));
+                }
+            } catch (error) {
+                if (isMounted) {
+                    setTotalPortfolioBalance(0);
+                }
+
+                console.error('Erro ao carregar orçamento:', error);
+            }
+        };
+
+        const fetchCategorias = async () => {
+            setIsLoadingCategorias(true);
+            setCategoriasError('');
+
+            try {
+                const token = await getAuthToken();
+                const response = await axios.get<CategoriasApiResponseItem[]>(
+                    CATEGORIAS_API_URL,
+                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+                );
+
+                if (isMounted) {
+                    const rawItems = Array.isArray(response.data) ? response.data : [];
+                    const nextCategorias = rawItems
+                        .map((item, index) => ({
+                            categoria: item.categoria,
+                            value: Number(item.valor),
+                            color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+                        }))
+                        .sort((a, b) => b.value - a.value);
+
+                    setCategoriasGrafico(nextCategorias);
+                }
+            } catch (error) {
+                if (isMounted) {
+                    setCategoriasGrafico([]);
+
+                    if (isAxiosError(error)) {
+                        setCategoriasError(error.response?.data?.message || 'Não foi possível carregar as categorias.');
+                    } else if (error instanceof Error) {
+                        setCategoriasError(error.message);
+                    } else {
+                        setCategoriasError('Não foi possível carregar as categorias.');
+                    }
+                }
+
+                console.error('Erro ao carregar categorias:', error);
+            } finally {
+                if (isMounted) {
+                    setIsLoadingCategorias(false);
+                }
+            }
+        };
 
         const fetchTendencia = async () => {
             setIsLoadingTendencia(true);
             setTendenciaError('');
 
             try {
-                const response = await axios.get<TendenciaApiResponse[]>(MOVIMENTACOES_GRAFICO_API_URL);
+                const token = await getAuthToken();
+                const response = await axios.get<MovimentacoesGraficoApiResponse>(
+                    MOVIMENTACOES_GRAFICO_API_URL,
+                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+                );
 
                 if (isMounted) {
-                    const rawItems = Array.isArray(response.data) ? response.data : [];
+                    const rawItems = Array.isArray(response.data?.data) ? response.data.data : [];
+                    const graficoMovimentacoes: GraficoMovimentacao[] = rawItems.map((item) => ({
+                        data: item.dataMovimentacao,
+                        valor: Number(item.valor),
+                    }));
 
-                    setTotalPortfolioBalance(
-                        rawItems.reduce((sum, item) => sum + Number(item.valor), 0),
-                    );
-                    setTendencia(groupTrendByMonth(rawItems));
+                    setTendencia(groupTrendByMonth(graficoMovimentacoes));
                 }
             } catch (error) {
                 if (isMounted) {
-                    setTotalPortfolioBalance(0);
                     setTendencia([]);
 
                     if (isAxiosError(error) && error.response?.status === 401) {
@@ -180,7 +280,10 @@ export default function DashboardScreen() {
             }
         };
 
+        fetchMovimentacoes();
+        fetchOrcamento();
         fetchTendencia();
+        fetchCategorias();
 
         return () => {
             isMounted = false;
@@ -195,7 +298,7 @@ export default function DashboardScreen() {
         [tendencia],
     );
 
-    const categoryBreakdown = useMemo(() => buildCategoryBreakdown(movimentacoes), [movimentacoes]);
+    const categoryBreakdown = useMemo(() => categoriasGrafico, [categoriasGrafico]);
     const totalCategories = categoryBreakdown.reduce((sum, item) => sum + item.value, 0);
     const mainCategoryPercent = totalCategories > 0
         ? Math.round(((categoryBreakdown[0]?.value ?? 0) / totalCategories) * 100)
@@ -247,55 +350,69 @@ export default function DashboardScreen() {
                         <Text style={styles.sectionTitle}>By Category</Text>
 
                         <View style={styles.categoryContent}>
-                            <View style={styles.donutWrap}>
-                                <Svg width={190} height={190}>
-                                    <Circle
-                                        cx="95"
-                                        cy="95"
-                                        r="72"
-                                        stroke={COLORS.surfaceMuted}
-                                        strokeWidth="14"
-                                        fill="transparent"
-                                    />
-                                    {categoryBreakdown.map((item, index) => {
-                                        const circumference = 2 * Math.PI * 72;
-                                        const previousTotal = categoryBreakdown
-                                            .slice(0, index)
-                                            .reduce((sum, current) => sum + current.value, 0);
-                                        const segmentLength = totalCategories > 0 ? (item.value / totalCategories) * circumference : 0;
-                                        const dashOffset = totalCategories > 0
-                                            ? -(previousTotal / totalCategories) * circumference
-                                            : 0;
-
-                                        return (
+                            {isLoadingCategorias ? (
+                                <View style={styles.activityLoadingState}>
+                                    <ActivityIndicator size="small" color={COLORS.brand} />
+                                    <Text style={styles.activityLoadingText}>Carregando categorias...</Text>
+                                </View>
+                            ) : categoriasError ? (
+                                <View style={styles.activityEmptyState}>
+                                    <Ionicons name="alert-circle-outline" size={20} color={COLORS.textSoft} />
+                                    <Text style={styles.activityEmptyText}>{categoriasError}</Text>
+                                </View>
+                            ) : (
+                                <>
+                                    <View style={styles.donutWrap}>
+                                        <Svg width={190} height={190}>
                                             <Circle
-                                                key={item.label}
                                                 cx="95"
                                                 cy="95"
                                                 r="72"
-                                                stroke={item.color}
+                                                stroke={COLORS.surfaceMuted}
                                                 strokeWidth="14"
                                                 fill="transparent"
-                                                strokeDasharray={`${segmentLength} ${circumference - segmentLength}`}
-                                                strokeDashoffset={dashOffset}
-                                                strokeLinecap="round"
-                                                rotation="-90"
-                                                origin="95, 95"
                                             />
-                                        );
-                                    })}
-                                </Svg>
-                                <View style={styles.donutCenter}>
-                                    <Text style={styles.donutPercent}>{mainCategoryPercent}%</Text>
-                                </View>
-                            </View>
+                                            {categoryBreakdown.map((item, index) => {
+                                                const circumference = 2 * Math.PI * 72;
+                                                const previousTotal = categoryBreakdown
+                                                    .slice(0, index)
+                                                    .reduce((sum, current) => sum + current.value, 0);
+                                                const segmentLength = totalCategories > 0 ? (item.value / totalCategories) * circumference : 0;
+                                                const dashOffset = totalCategories > 0
+                                                    ? -(previousTotal / totalCategories) * circumference
+                                                    : 0;
 
-                            <View style={styles.categoryLegend}>
-                                {categoryBreakdown.map((item) => (
-                                    <CategoryLegendRow key={item.label} label={item.label} value={item.value} color={item.color} />
-                                ))}
-                                <CategoryLegendRow label="Total" value={totalCategories} color={COLORS.brand} />
-                            </View>
+                                                return (
+                                                    <Circle
+                                                        key={item.categoria}
+                                                        cx="95"
+                                                        cy="95"
+                                                        r="72"
+                                                        stroke={item.color}
+                                                        strokeWidth="14"
+                                                        fill="transparent"
+                                                        strokeDasharray={`${segmentLength} ${circumference - segmentLength}`}
+                                                        strokeDashoffset={dashOffset}
+                                                        strokeLinecap="round"
+                                                        rotation="-90"
+                                                        origin="95, 95"
+                                                    />
+                                                );
+                                            })}
+                                        </Svg>
+                                        <View style={styles.donutCenter}>
+                                            <Text style={styles.donutPercent}>{mainCategoryPercent}%</Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.categoryLegend}>
+                                        {categoryBreakdown.map((item) => (
+                                            <CategoryLegendRow key={item.categoria} label={item.categoria} value={item.value} color={item.color} />
+                                        ))}
+                                        <CategoryLegendRow label="Total" value={totalCategories} color={COLORS.brand} />
+                                    </View>
+                                </>
+                            )}
                         </View>
                     </View>
 
@@ -303,7 +420,7 @@ export default function DashboardScreen() {
                         <Text style={styles.sectionTitle}>Recent Activity</Text>
                         <Pressable
                             style={styles.actionButton}
-                            onPress={() => router.push('/register-transaction')}
+                            onPress={() => router.push('/register-transaction' as never)}
                         >
                             <Ionicons name="add" size={18} color={COLORS.surface} />
                             <Text style={styles.actionButtonText}>New Transaction</Text>
@@ -324,7 +441,7 @@ export default function DashboardScreen() {
                         ) : movimentacoes.length > 0 ? (
                             movimentacoes.map((item, index) => (
                                 <ActivityRow
-                                    key={String(item.id)}
+                                    key={`${item.categoria}-${item.dataMovimentacao}-${index}`}
                                     item={item}
                                     isLast={index === movimentacoes.length - 1}
                                 />
@@ -361,44 +478,46 @@ function CategoryLegendRow({ label, value, color }: CategoryLegendRowProps) {
     );
 }
 
-function buildCategoryBreakdown(items: Movimentacao[]): CategoryBreakdownItem[] {
-    const totals = new Map<string, number>();
+function extractBudgetValue(response: OrcamentoApiResponse) {
+    if (typeof response === 'number') {
+        return response;
+    }
 
-    items.forEach((item) => {
-        if (!isExpenseMovimentacao(item)) {
-            return;
+    if (typeof response === 'string') {
+        return Number(response) || 0;
+    }
+
+    const candidateValues = [
+        response.total,
+        response.valor,
+        response.saldo,
+        response.orcamento,
+        response.value,
+        response.amount,
+        response.data?.total,
+        response.data?.valor,
+        response.data?.saldo,
+        response.data?.orcamento,
+        response.data?.value,
+        response.data?.amount,
+    ];
+
+    for (const candidate of candidateValues) {
+        if (candidate !== undefined && candidate !== null) {
+            const parsedValue = Number(candidate);
+
+            if (!Number.isNaN(parsedValue)) {
+                return parsedValue;
+            }
         }
-
-        const label = (item.categoria || 'Sem categoria').trim();
-        const currentTotal = totals.get(label) ?? 0;
-        totals.set(label, currentTotal + Math.abs(item.valor));
-    });
-
-    return Array.from(totals.entries())
-        .map(([label, value], index) => ({
-            label,
-            value,
-            color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
-        }))
-        .sort((a, b) => b.value - a.value)
-        ;
-}
-
-function isExpenseMovimentacao(item: Movimentacao) {
-    const normalizedTipo = String(item.tipo ?? '').trim().toLowerCase();
-
-    if (normalizedTipo.includes('despesa') || normalizedTipo.includes('expense') || normalizedTipo.includes('saida')) {
-        return true;
     }
 
-    if (normalizedTipo.includes('receita') || normalizedTipo.includes('income') || normalizedTipo.includes('entrada')) {
-        return false;
-    }
-
-    return item.valor < 0;
+    return 0;
 }
 
-function groupTrendByMonth(items: TendenciaApiResponse[]) {
+
+
+function groupTrendByMonth(items: GraficoMovimentacao[]) {
     const monthlyTotals = new Map<string, number>();
     const parsedItems = items
         .map((item) => ({
@@ -410,7 +529,7 @@ function groupTrendByMonth(items: TendenciaApiResponse[]) {
     parsedItems.forEach((item) => {
         const monthKey = toMonthKey(item.data);
         const currentTotal = monthlyTotals.get(monthKey) ?? 0;
-        monthlyTotals.set(monthKey, currentTotal + Number(item.valor));
+        monthlyTotals.set(monthKey, currentTotal + item.valor);
     });
 
     const sortedMonths = Array.from(monthlyTotals.keys()).sort();
@@ -443,6 +562,16 @@ function expandMonthRange(startMonthKey: string, endMonthKey: string) {
 function toMonthKey(value: string) {
     return value.slice(0, 7);
 }
+
+function formatMonthShort(value: string) {
+    const date = new Date(`${value}T00:00:00`);
+    return new Intl.DateTimeFormat('pt-BR', { month: 'short' })
+        .format(date)
+        .replace('.', '')
+        .replace(/\s/g, '.');
+}
+
+
 
 function AutoSizeLineChart({ data }: { data: ChartPoint[] }) {
     const [containerWidth, setContainerWidth] = useState(0);
@@ -543,13 +672,7 @@ function AutoSizeLineChart({ data }: { data: ChartPoint[] }) {
     );
 }
 
-function formatMonthShort(value: string) {
-    const date = new Date(`${value}T00:00:00`);
-    return new Intl.DateTimeFormat('pt-BR', { month: 'short' })
-        .format(date)
-        .replace('.', '')
-        .replace(/\s/g, '.');
-}
+
 
 function formatCurrency(value: number) {
     return new Intl.NumberFormat('pt-BR', {

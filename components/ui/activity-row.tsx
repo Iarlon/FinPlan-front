@@ -2,11 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
 type Movimentacao = {
-    tipo: string;
     categoria: string;
+    dataMovimentacao: string;
+    descricao: string;
     valor: number;
-    data?: string;
-    descricao?: string;
+    tag: string;
+    tipo?: 1 | 2;
 };
 
 type ActivityRowProps = {
@@ -25,8 +26,8 @@ const COLORS = {
 };
 
 export function ActivityRow({ item, isLast }: ActivityRowProps) {
-    const isExpense = isExpenseMovimentacao(item);
-    const iconName = getActivityIcon(item.categoria, item.tipo);
+    const isExpense = item.tipo === 2 ? true : item.tipo === 1 ? false : item.valor < 0;
+    const iconName = getActivityIcon(item.categoria);
     const accentColor = isExpense ? COLORS.danger : COLORS.success;
     const iconBackground = isExpense ? COLORS.expenseTint : COLORS.incomeTint;
     const valueLabel = `${isExpense ? '-' : '+'}${formatCurrency(Math.abs(item.valor))}`;
@@ -50,23 +51,31 @@ export function ActivityRow({ item, isLast }: ActivityRowProps) {
 function buildActivityMeta(item: Movimentacao) {
     const metaParts: string[] = [];
 
-    if (item.data) {
-        metaParts.push(formatShortDate(item.data));
+    if (item.dataMovimentacao) {
+        metaParts.push(formatMovimentacaoDate(item.dataMovimentacao));
     }
 
     if (item.descricao) {
         metaParts.push(item.descricao);
     }
 
+    if (item.tag) {
+        metaParts.push(`#${item.tag}`);
+    }
+
     if (metaParts.length > 0) {
         return metaParts.join(' • ');
     }
 
-    return isExpenseMovimentacao(item) ? 'Despesa' : 'Receita';
+    return item.valor < 0 ? 'Despesa' : 'Receita';
 }
 
-function getActivityIcon(categoria: string, tipo: string): keyof typeof Ionicons.glyphMap {
+function getActivityIcon(categoria: string): keyof typeof Ionicons.glyphMap {
     const normalized = removeAccents(categoria.toLowerCase());
+
+    if (normalized.includes('bonus') || normalized.includes('bônus')) {
+        return 'gift-outline';
+    }
 
     if (normalized.includes('sports') || normalized.includes('sport') || normalized.includes('esporte')) {
         return 'barbell-outline';
@@ -116,43 +125,28 @@ function getActivityIcon(categoria: string, tipo: string): keyof typeof Ionicons
         return 'cash-outline';
     }
 
-    if (isIncomeTipo(tipo)) {
-        return 'briefcase-outline';
-    }
-
     return 'card-outline';
-}
-
-function isExpenseMovimentacao(item: Movimentacao) {
-    const normalizedTipo = removeAccents(String(item.tipo ?? '').trim().toLowerCase());
-
-    if (normalizedTipo.includes('despesa') || normalizedTipo.includes('expense') || normalizedTipo.includes('saida')) {
-        return true;
-    }
-
-    if (normalizedTipo.includes('receita') || normalizedTipo.includes('income') || normalizedTipo.includes('entrada')) {
-        return false;
-    }
-
-    return item.valor < 0;
-}
-
-function isIncomeTipo(tipo: string) {
-    const normalizedTipo = removeAccents(tipo.trim().toLowerCase());
-
-    return normalizedTipo.includes('receita') || normalizedTipo.includes('income') || normalizedTipo.includes('entrada');
 }
 
 function removeAccents(value: string) {
     return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
-function formatShortDate(value: string) {
-    const date = new Date(`${value}T00:00:00`);
-    return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' })
-        .format(date)
-        .replace('.', '')
-        .replace(/\s/g, '.');
+function formatMovimentacaoDate(value: string) {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return new Intl.DateTimeFormat('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(date);
 }
 
 function formatCurrency(value: number) {
