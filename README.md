@@ -1,6 +1,16 @@
+# Integrantes
+- Iarlon Soares da Silva Oliveira
+- Luiz Felipe Ferreira de Albuquerque
+- Kamilly Vitória Freire Lima
+- Ruam Henrique
+
 # Welcome to your Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+
+## 🎥 Apresentação do Projeto
+
+Assista à demonstração completa e apresentação das funcionalidades no YouTube: https://www.youtube.com/watch?v=Mg5eiD6O3kY
 
 ## Get started
 
