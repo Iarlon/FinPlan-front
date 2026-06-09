@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import axios, { isAxiosError } from 'axios';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Circle, Line, Path, Svg, Text as SvgText } from 'react-native-svg';
@@ -118,177 +119,174 @@ export default function DashboardScreen() {
     const [isLoadingTendencia, setIsLoadingTendencia] = useState(true);
     const [tendenciaError, setTendenciaError] = useState('');
 
-    useEffect(() => {
-        let isMounted = true;
+    useFocusEffect(
+        useCallback(() => {
+            let isMounted = true;
 
-        const fetchMovimentacoes = async () => {
-            setIsLoadingMovimentacoes(true);
-            setMovimentacoesError('');
+            const fetchMovimentacoes = async () => {
+                setIsLoadingMovimentacoes(true);
+                setMovimentacoesError('');
 
-            try {
-                // try to read stored token and include it explicitly as a fallback
-                let token: string | null = null;
                 try {
-                    const { getAuthToken } = await import('../../lib/auth-storage');
-                    token = await getAuthToken();
-                } catch (e) {
-                    console.warn('Could not read auth token before fetching movimentacoes', e);
-                }
+                    const token = await getAuthToken();
+                    const response = await axios.get<Movimentacao[]>(
+                        MOVIMENTACOES_API_URL,
+                        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+                    );
 
-                const response = await axios.get<Movimentacao[]>(MOVIMENTACOES_API_URL, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+                    if (isMounted) {
+                        const nextMovimentacoes = Array.isArray(response.data) ? response.data : [];
 
-                if (isMounted) {
-                    const nextMovimentacoes = Array.isArray(response.data) ? response.data : [];
+                        setMovimentacoes(nextMovimentacoes);
+                    }
+                } catch (error) {
+                    if (isMounted) {
+                        setMovimentacoes([]);
 
-                    setMovimentacoes(nextMovimentacoes);
-                }
-            } catch (error) {
-                if (isMounted) {
-                    setMovimentacoes([]);
+                        if (isAxiosError(error) && error.response?.status === 401) {
+                            router.replace('/(auth)/login');
+                            return;
+                        }
 
-                    if (isAxiosError(error) && error.response?.status === 401) {
-                        router.replace('/(auth)/login');
-                        return;
+                        if (isAxiosError(error)) {
+                            setMovimentacoesError(
+                                error.response?.data?.message || 'Não foi possível carregar as movimentações.',
+                            );
+                        } else if (error instanceof Error) {
+                            setMovimentacoesError(error.message);
+                        } else {
+                            setMovimentacoesError('Não foi possível carregar as movimentações.');
+                        }
                     }
 
-                    if (isAxiosError(error)) {
-                        setMovimentacoesError(
-                            error.response?.data?.message || 'Não foi possível carregar as movimentações.',
-                        );
-                    } else if (error instanceof Error) {
-                        setMovimentacoesError(error.message);
-                    } else {
-                        setMovimentacoesError('Não foi possível carregar as movimentações.');
+                    console.error('Erro ao carregar movimentações:', error);
+                } finally {
+                    if (isMounted) {
+                        setIsLoadingMovimentacoes(false);
                     }
                 }
+            };
 
-                console.error('Erro ao carregar movimentações:', error);
-            } finally {
-                if (isMounted) {
-                    setIsLoadingMovimentacoes(false);
-                }
-            }
-        };
+            const fetchOrcamento = async () => {
+                try {
+                    const token = await getAuthToken();
+                    const response = await axios.get<OrcamentoApiResponse>(
+                        ORCAMENTO_API_URL,
+                        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+                    );
 
-        const fetchOrcamento = async () => {
-            try {
-                const token = await getAuthToken();
-                const response = await axios.get<OrcamentoApiResponse>(
-                    ORCAMENTO_API_URL,
-                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-                );
-
-                if (isMounted) {
-                    setTotalPortfolioBalance(extractBudgetValue(response.data));
-                }
-            } catch (error) {
-                if (isMounted) {
-                    setTotalPortfolioBalance(0);
-                }
-
-                console.error('Erro ao carregar orçamento:', error);
-            }
-        };
-
-        const fetchCategorias = async () => {
-            setIsLoadingCategorias(true);
-            setCategoriasError('');
-
-            try {
-                const token = await getAuthToken();
-                const response = await axios.get<CategoriasApiResponseItem[]>(
-                    CATEGORIAS_API_URL,
-                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-                );
-
-                if (isMounted) {
-                    const rawItems = Array.isArray(response.data) ? response.data : [];
-                    const nextCategorias = rawItems
-                        .map((item, index) => ({
-                            categoria: item.categoria,
-                            value: Number(item.valor),
-                            color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
-                        }))
-                        .sort((a, b) => b.value - a.value);
-
-                    setCategoriasGrafico(nextCategorias);
-                }
-            } catch (error) {
-                if (isMounted) {
-                    setCategoriasGrafico([]);
-
-                    if (isAxiosError(error)) {
-                        setCategoriasError(error.response?.data?.message || 'Não foi possível carregar as categorias.');
-                    } else if (error instanceof Error) {
-                        setCategoriasError(error.message);
-                    } else {
-                        setCategoriasError('Não foi possível carregar as categorias.');
+                    if (isMounted) {
+                        setTotalPortfolioBalance(extractBudgetValue(response.data));
                     }
-                }
-
-                console.error('Erro ao carregar categorias:', error);
-            } finally {
-                if (isMounted) {
-                    setIsLoadingCategorias(false);
-                }
-            }
-        };
-
-        const fetchTendencia = async () => {
-            setIsLoadingTendencia(true);
-            setTendenciaError('');
-
-            try {
-                const token = await getAuthToken();
-                const response = await axios.get<MovimentacoesGraficoApiResponse>(
-                    MOVIMENTACOES_GRAFICO_API_URL,
-                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-                );
-
-                if (isMounted) {
-                    const rawItems = Array.isArray(response.data?.data) ? response.data.data : [];
-                    const graficoMovimentacoes: GraficoMovimentacao[] = rawItems.map((item) => ({
-                        data: item.dataMovimentacao,
-                        valor: Number(item.valor),
-                    }));
-
-                    setTendencia(groupTrendByMonth(graficoMovimentacoes));
-                }
-            } catch (error) {
-                if (isMounted) {
-                    setTendencia([]);
-
-                    if (isAxiosError(error) && error.response?.status === 401) {
-                        router.replace('/(auth)/login');
-                        return;
+                } catch (error) {
+                    if (isMounted) {
+                        setTotalPortfolioBalance(0);
                     }
 
-                    if (isAxiosError(error)) {
-                        setTendenciaError(error.response?.data?.message || 'Não foi possível carregar o gráfico.');
-                    } else if (error instanceof Error) {
-                        setTendenciaError(error.message);
-                    } else {
-                        setTendenciaError('Não foi possível carregar o gráfico.');
+                    console.error('Erro ao carregar orçamento:', error);
+                }
+            };
+
+            const fetchCategorias = async () => {
+                setIsLoadingCategorias(true);
+                setCategoriasError('');
+
+                try {
+                    const token = await getAuthToken();
+                    const response = await axios.get<CategoriasApiResponseItem[]>(
+                        CATEGORIAS_API_URL,
+                        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+                    );
+
+                    if (isMounted) {
+                        const rawItems = Array.isArray(response.data) ? response.data : [];
+                        const nextCategorias = rawItems
+                            .map((item, index) => ({
+                                categoria: item.categoria,
+                                value: Number(item.valor),
+                                color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+                            }))
+                            .sort((a, b) => b.value - a.value);
+
+                        setCategoriasGrafico(nextCategorias);
+                    }
+                } catch (error) {
+                    if (isMounted) {
+                        setCategoriasGrafico([]);
+
+                        if (isAxiosError(error)) {
+                            setCategoriasError(error.response?.data?.message || 'Não foi possível carregar as categorias.');
+                        } else if (error instanceof Error) {
+                            setCategoriasError(error.message);
+                        } else {
+                            setCategoriasError('Não foi possível carregar as categorias.');
+                        }
+                    }
+
+                    console.error('Erro ao carregar categorias:', error);
+                } finally {
+                    if (isMounted) {
+                        setIsLoadingCategorias(false);
                     }
                 }
+            };
 
-                console.error('Erro ao carregar gráfico:', error);
-            } finally {
-                if (isMounted) {
-                    setIsLoadingTendencia(false);
+            const fetchTendencia = async () => {
+                setIsLoadingTendencia(true);
+                setTendenciaError('');
+
+                try {
+                    const token = await getAuthToken();
+                    const response = await axios.get<MovimentacoesGraficoApiResponse>(
+                        MOVIMENTACOES_GRAFICO_API_URL,
+                        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+                    );
+
+                    if (isMounted) {
+                        const rawItems = Array.isArray(response.data?.data) ? response.data.data.slice(0, 12) : [];
+                        const graficoMovimentacoes: GraficoMovimentacao[] = rawItems.map((item) => ({
+                            data: item.dataMovimentacao,
+                            valor: Number(item.valor),
+                        }));
+
+                        setTendencia(groupTrendByMonth(graficoMovimentacoes));
+                    }
+                } catch (error) {
+                    if (isMounted) {
+                        setTendencia([]);
+
+                        if (isAxiosError(error) && error.response?.status === 401) {
+                            router.replace('/(auth)/login');
+                            return;
+                        }
+
+                        if (isAxiosError(error)) {
+                            setTendenciaError(error.response?.data?.message || 'Não foi possível carregar o gráfico.');
+                        } else if (error instanceof Error) {
+                            setTendenciaError(error.message);
+                        } else {
+                            setTendenciaError('Não foi possível carregar o gráfico.');
+                        }
+                    }
+
+                    console.error('Erro ao carregar gráfico:', error);
+                } finally {
+                    if (isMounted) {
+                        setIsLoadingTendencia(false);
+                    }
                 }
-            }
-        };
+            };
 
-        fetchMovimentacoes();
-        fetchOrcamento();
-        fetchTendencia();
-        fetchCategorias();
+            fetchMovimentacoes();
+            fetchOrcamento();
+            fetchTendencia();
+            fetchCategorias();
 
-        return () => {
-            isMounted = false;
-        };
-    }, []);
+            return () => {
+                isMounted = false;
+            };
+        }, []),
+    );
 
     const chartData = useMemo(
         () => tendencia.map((item) => ({
