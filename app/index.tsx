@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { configureApiAuth } from '../lib/api';
 import { getAuthToken } from '../lib/auth-storage';
 
 /**
@@ -17,6 +18,7 @@ export default function Index() {
                 const token = await getAuthToken();
 
                 if (token) {
+                    configureApiAuth(token);
                     router.replace('/dashboard' as never);
                 } else {
                     router.replace('/(auth)/login');

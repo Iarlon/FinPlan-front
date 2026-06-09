@@ -16,7 +16,9 @@ import {
     View,
 } from 'react-native';
 
-const API_URL = 'http://planfin.tech:8080/usuarios';
+import { API_BASE_URL } from '../../lib/api';
+
+const API_URL = `${API_BASE_URL}/usuarios`;
 
 type InputFieldProps = {
     icon: keyof typeof Ionicons.glyphMap;
@@ -124,7 +126,7 @@ export default function SignUpScreen() {
     };
 
     const handleSignIn = () => {
-        router.navigate('/login'); 
+        router.navigate('/login');
     };
 
     return (
