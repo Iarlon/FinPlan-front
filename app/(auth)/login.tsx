@@ -112,7 +112,7 @@ export default function LoginScreen() {
             if (token) {
                 await setAuthToken(token);
                 configureApiAuth(token);
-                router.replace('/dashboard' as never);
+                router.replace('/(tabs)/dashboard');
             } else {
                 setFormError('O servidor respondeu sem token. Tente novamente.');
             }

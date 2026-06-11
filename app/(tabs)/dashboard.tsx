@@ -144,7 +144,8 @@ export default function DashboardScreen() {
                         setMovimentacoes([]);
 
                         if (isAxiosError(error) && error.response?.status === 401) {
-                            router.replace('/(auth)/login');
+                            console.warn('Unauthorized on Dashboard, kicking back to login');
+                            router.replace('/login');
                             return;
                         }
 
@@ -256,7 +257,7 @@ export default function DashboardScreen() {
                         setTendencia([]);
 
                         if (isAxiosError(error) && error.response?.status === 401) {
-                            router.replace('/(auth)/login');
+                            router.replace('/login');
                             return;
                         }
 

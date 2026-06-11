@@ -47,7 +47,7 @@ function InputField({
 }: InputFieldProps) {
     return (
         <View style={styles.field}>
-            <Ionicons nome={icon} size={18} color={COLORS.fieldIcon} style={styles.fieldIcon} />
+            <Ionicons name={icon} size={18} color={COLORS.fieldIcon} style={styles.fieldIcon} />
             <TextInput
                 value={value}
                 onChangeText={onChangeText}
@@ -184,7 +184,7 @@ export default function SignUpScreen() {
                                             disabled={isLoading}
                                             onPress={() => setIsSenhaVisible((current) => !current)}>
                                             <Ionicons
-                                                nome={isSenhaVisible ? 'eye-off-outline' : 'eye-outline'}
+                                                name={isSenhaVisible ? 'eye-off-outline' : 'eye-outline'}
                                                 size={22}
                                                 color={COLORS.fieldIcon}
                                             />
@@ -206,7 +206,7 @@ export default function SignUpScreen() {
                                             disabled={isLoading}
                                             onPress={() => setIsConfirmSenhaVisible((current) => !current)}>
                                             <Ionicons
-                                                nome={isConfirmSenhaVisible ? 'eye-off-outline' : 'eye-outline'}
+                                                name={isConfirmSenhaVisible ? 'eye-off-outline' : 'eye-outline'}
                                                 size={22}
                                                 color={COLORS.fieldIcon}
                                             />
@@ -236,7 +236,7 @@ export default function SignUpScreen() {
 
                         <View style={styles.footer}>
                             <View style={styles.footerLine}>
-                                <Ionicons nome="lock-closed" size={13} color={COLORS.footer} />
+                                <Ionicons name="lock-closed" size={13} color={COLORS.footer} />
                                 <Text style={styles.footerText}>256-bit SSL Encryption Secured</Text>
                             </View>
                             <Text style={styles.footerText}>© 2024 IS Financial Services. Member FDIC.</Text>

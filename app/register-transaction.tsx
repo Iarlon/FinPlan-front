@@ -17,9 +17,10 @@ import {
     TextInput,
     View,
 } from 'react-native';
+import { API_BASE_URL } from '../lib/api';
 import { getAuthToken } from '../lib/auth-storage';
 
-const API_URL = 'http://planfin.tech:8080/movimentacoes';
+const API_URL = `${API_BASE_URL}/movimentacoes`;
 
 const CATEGORIES_LIST = [
     { id: 1, descricao: "Alimentacao", tipo: 2, icon: "restaurant-outline" },
